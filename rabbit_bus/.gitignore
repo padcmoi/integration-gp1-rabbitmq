@@ -1,0 +1,5 @@
+# Ignore debug files, check BUS_DEBUG
+
+consume.txt
+publish.txt
+
