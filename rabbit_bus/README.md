@@ -107,52 +107,33 @@ SQL direct : la logique métier des modèles s'applique comme si l'app avait
 fait l'écriture elle-même. Un verbe pas encore implémenté lève
 `NotImplementedError` et répond donc `ok: false` proprement.
 
-## Publishers
+## Publishers : la meme convention, en miroir
 
-Un fichier par publisher dans `publishers/`, avec **1 ou N queues de
-destination**. Le modèle est
-[publishers/publie_exemple.py](publishers/publie_exemple.py) :
-
-```python
-NAMESPACE = "publie_exemple"
-QUEUES = ["test.queue", "autre.queue"]   # 1..N destinations
-ARGS = {"demo": 1}
-
-def run(args):
-    return {"le": "message publie sur chaque queue"}
+```
+publishers/
+  _global/               publishers autonomes, NAMESPACE declare :
+    publie_exemple.py    declenches par un message qui les nomme (202 Accepted)
+  honoraires_edl/        le MIROIR d un verbe consumer :
+    patch.py             quand honoraires_edl:PATCH reussit une ecriture, le
+                         bus publie ce message vers les QUEUES du fichier
 ```
 
-Déclenchement : un message entrant qui nomme ce namespace. Le bus publie alors
-le retour de `run(args)` vers chaque queue listée, en **mode direct** RabbitMQ
-(exchange par défaut `""`, routing key = nom exact de la queue : un message, un
-destinataire). Le bus estampille `replyTo` (notre queue) et un `correlationId`
-sur chaque publication : **les queues destinataires peuvent répondre**, et leurs
-réponses, reconnues par le `correlationId`, sont enregistrées dans
-`publish.txt` au lieu d'être traitées comme des commandes.
+Chaque fichier declare `QUEUES` (1..N queues de destination, mode direct :
+exchange `""`, routing key = nom exact) et `run(...)` qui construit le
+message. Memes regles que les consumers : 5 verbes seulement en dossier metier,
+`NAMESPACE` obligatoire et verifie contre le chemin, `__init__.py` vide.
 
-Celui qui a déclenché reçoit en réponse `{"ok": true, "published": {"queues":
-[...], "correlationId": "..."}}`.
+**L annonce miroir** : une ecriture qui a reussi est annoncee aux queues
+nommees, en fire-and-forget - comme les write-events du data-provider, une
+annonce peut se perdre, elle ne peut jamais faire echouer la reponse au
+demandeur. `run(event)` recoit le resultat du consumer et retourne le message
+au contrat d ecriture de l ecosysteme ({method, table, persist, data, files}) :
+le data-provider qui le recoit purge le cache de la table, l app de test
+l intercepte. Le bus estampille replyTo + correlationId, les reponses
+eventuelles sont reconnues et archivees dans publish.txt.
 
-## HTTP_CODE et reason des réponses
-
-Chaque réponse d'un consumer vers l'émetteur porte `HTTP_CODE` et `reason` :
-
-| HTTP_CODE | reason                | quand                                                    |
-| --------- | --------------------- | -------------------------------------------------------- |
-| 200       | OK                    | GET/PUT/PATCH/DELETE réussi, global réussi               |
-| 201       | Created               | POST réussi                                              |
-| 202       | Accepted              | publisher déclenché, publications parties                |
-| 400       | Bad Request           | valeur ou forme refusée (validation business, full_clean) |
-| 403       | Forbidden             | règle business qui interdit l'opération (`Forbidden`)    |
-| 404       | Not Found             | pk introuvable, ou namespace inconnu                     |
-| 409       | Conflict              | déjà dans cet état (patcher step 1 quand il vaut 1)      |
-| 500       | Internal Server Error | erreur inattendue                                        |
-| 501       | Not Implemented       | verbe pas encore implémenté                              |
-
-Il n'y a pas de 401 : la boîte aux lettres est l'autorisation, qui ne peut pas
-publier sur la queue ne peut pas parler au bus. Côté consumer, on lève
-`BadRequest` / `Forbidden` / `NotFound` / `Conflict` de `consumers/_errors.py` ;
-un `ValueError` nu répond 400, `NotImplementedError` 501, le reste 500.
+Un publisher autonome (`_global/`) repond `{"ok": true, "published":
+{"queues": [...], "correlationId": "..."}}` a celui qui le declenche.
 
 ## Le consumer `namespaces`
 

@@ -1,25 +1,64 @@
-"""One module per publisher. A module exposing NAMESPACE, QUEUES (1..N queue
-names) and run(args) publishes run\x27s return to each of those queues in direct
-mode; drop a new publisher here and restart the service. An optional ARGS dict
-({name: example value}) declares the arguments the namespace expects."""
+"""Publishers, organised like the consumers.
+
+publishers/_global/     free-standing publishers, NAMESPACE declared, triggered
+                        by a message naming them (answered 202 Accepted)
+publishers/<metier>/    the MIRROR of a consumer verb: when the consumer of the
+                        same namespace succeeds, the bus publishes this file's
+                        message to its QUEUES, fire-and-forget. Only the five
+                        verbs get/post/put/patch/delete are allowed and
+                        NAMESPACE must match the path, as on the consumer side.
+
+Every module declares QUEUES (1..N destination queue names, direct mode) and
+run(...) building the message. Files starting with "_" are helpers and never
+registered. A file that breaks a rule is refused with an error in the journal.
+"""
 
 import importlib
+import logging
 import pkgutil
+
+logger = logging.getLogger("bus.registry")
+
+ALLOWED_VERBS = ("get", "post", "put", "patch", "delete")
 
 REGISTRY = {}
 
-for module_info in pkgutil.iter_modules(__path__):
-    module = importlib.import_module(f"{__name__}.{module_info.name}")
-    namespace = getattr(module, "NAMESPACE", None)
+
+def _register(namespace, module):
     queues = getattr(module, "QUEUES", None)
     run = getattr(module, "run", None)
+    if not (isinstance(queues, (list, tuple)) and queues and all(isinstance(queue, str) and queue for queue in queues)):
+        logger.error("%s: QUEUES (1..N queue names) is required, refused", module.__name__)
+        return
+    if not callable(run):
+        logger.error("%s: no run() function, refused", module.__name__)
+        return
     declared = getattr(module, "ARGS", {})
-    if (
-        isinstance(namespace, str)
-        and namespace
-        and isinstance(queues, (list, tuple))
-        and queues
-        and all(isinstance(queue, str) and queue for queue in queues)
-        and callable(run)
-    ):
-        REGISTRY[namespace] = {"queues": list(queues), "run": run, "args": declared if isinstance(declared, dict) else {}}
+    REGISTRY[namespace] = {"queues": list(queues), "run": run, "args": declared if isinstance(declared, dict) else {}}
+
+
+for package_info in pkgutil.iter_modules(__path__):
+    if not package_info.ispkg:
+        continue
+    if package_info.name != "_global" and package_info.name.startswith("_"):
+        continue
+    package = importlib.import_module(f"{__name__}.{package_info.name}")
+    for module_info in pkgutil.iter_modules(package.__path__):
+        if module_info.ispkg or module_info.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"{__name__}.{package_info.name}.{module_info.name}")
+        declared_namespace = getattr(module, "NAMESPACE", None)
+        if package_info.name == "_global":
+            if not isinstance(declared_namespace, str) or not declared_namespace:
+                logger.error("%s: NAMESPACE is missing, refused", module.__name__)
+                continue
+            _register(declared_namespace, module)
+            continue
+        if module_info.name not in ALLOWED_VERBS:
+            logger.error("%s: only get/post/put/patch/delete are allowed in a metier folder, refused", module.__name__)
+            continue
+        expected = f"{package_info.name}:{module_info.name.upper()}"
+        if declared_namespace != expected:
+            logger.error("%s: NAMESPACE must be %r (found %r), refused", module.__name__, expected, declared_namespace)
+            continue
+        _register(expected, module)

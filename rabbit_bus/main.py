@@ -228,7 +228,17 @@ class Bus:
         if consumer is not None:
             self.trace("consume.txt", {"type": "consumer", "namespace": namespace, "correlationId": correlation_id, "body": body})
             try:
-                answer.update(ok=True, **status_fields(success_status(namespace)), result=consumer(args))
+                result = consumer(args)
+                answer.update(ok=True, **status_fields(success_status(namespace)), result=result)
+                if namespace in publishers.REGISTRY:
+                    # The mirror publisher: a write that landed is announced to
+                    # the queues its file names. Fire-and-forget, like the
+                    # data-provider's own write events: an announcement can be
+                    # lost, it can never fail the answer.
+                    try:
+                        self.run_publisher(namespace, result)
+                    except Exception:
+                        logger.exception("announce namespace=%s failed", namespace)
             except Exception as error:  # a failure is an answer, never a redelivery loop
                 status = error_status(error)
                 log = logger.exception if status >= 500 else logger.warning
