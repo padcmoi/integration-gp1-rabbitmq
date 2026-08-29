@@ -12,6 +12,12 @@ _ready = False
 def setup_django():
     global _ready
     if _ready:
+        from django.db import close_old_connections
+
+        # The bus lives outside Django's request cycle, so nothing recycles a
+        # connection MySQL has dropped during an idle spell; without this, the
+        # first query after that idle dies with InterfaceError (0, '').
+        close_old_connections()
         return
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
