@@ -1,7 +1,13 @@
 """folder:PUT announcement, not implemented yet."""
 
 NAMESPACE = "folder:PUT"
-QUEUES = ["gp1-data-provider.queue", "test.queue"]
+QUEUES = [
+    "gp1-data-provider.queue",
+    "test.queue",
+    "gp1-test.witness-1.queue",
+    "gp1-test.witness-2.queue",
+    "gp1-test.witness-3.queue",
+]
 ARGS = {"pk": 630, "extra": {}}
 
 

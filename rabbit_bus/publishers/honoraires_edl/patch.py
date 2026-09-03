@@ -10,7 +10,13 @@ from publishers._event import extra_of, pk_of
 
 NAMESPACE = "honoraires_edl:PATCH"
 
-QUEUES = ["gp1-data-provider.queue", "test.queue"]
+QUEUES = [
+    "gp1-data-provider.queue",
+    "test.queue",
+    "gp1-test.witness-1.queue",
+    "gp1-test.witness-2.queue",
+    "gp1-test.witness-3.queue",
+]
 
 ARGS = {"pk": 425, "extra": {}}
 
