@@ -9,15 +9,21 @@ from rabbit_bus.emit import emit
 emit("folder:POST", instance)
 ```
 
-Le message porte deux clés, jamais plus :
+`emit` exécute le publisher sur place et envoie son message directement aux `QUEUES`
+déclarées dans le fichier du namespace, `gp1-data-provider.queue` et `test.queue`. La
+boîte du `.env` ne sert qu'aux consumers, rien n'y transite ; elle est seulement
+inscrite en `replyTo` pour que les réponses reviennent au bus.
+
+Le publisher reçoit deux clés, jamais plus :
 
 ```json
-{ "namespace": "folder:POST", "args": { "pk": 207, "extra": {} } }
+{ "pk": 207, "extra": {} }
 ```
 
 Le deuxième argument est la ligne annoncée. Seule sa PK part, nombre ou chaîne : une
 instance, un dict ou la clé nue donnent le même message, les colonnes du modèle ne sont
-jamais lues. Qui veut la ligne entière la relit à la source. Sans PK, le bus répond 400.
+jamais lues. Qui veut la ligne entière la relit à la source. Sans PK, rien ne part et
+`emit` retourne `False`.
 
 Le troisième argument, `extra`, est optionnel et totalement libre : n'importe quel JSON,
 ce que tu veux dedans, transporté à côté de la PK sans jamais s'y mélanger. L'omettre est
