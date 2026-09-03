@@ -12,23 +12,23 @@ app_folder carries an `edl_sortie` column too, but nothing writes it any more:
 the copy onto the folder is commented out in the same view. The DG row is the
 truth today, so it is what this announcement describes.
 
-The document itself travels as the storage path already held by the row, the
-way the honoraires_edl announcement carries its `facture` path; `files` stays
-empty because a file reference in this contract needs a URL pointing at whoever
-serves the document, and the bus serves none.
+The document itself does not travel: the announcement names the DG row and
+whoever wants the file reads it from there. `files` stays empty because a file
+reference in this contract needs a URL pointing at whoever serves the document,
+and the bus serves none.
 
 The message is the ecosystem's write-event contract ({method, table, persist,
-data, files}). The data-provider consuming it on gp1-data-provider.queue reads
-`table` and purges that table's cache; test.queue receives the same event for
-the test app."""
+data, files}), where `data` holds the key of the DG row and nothing else. The
+data-provider consuming it on gp1-data-provider.queue reads `table` and purges
+that table's cache; test.queue receives the same event for the test app."""
 
-from publishers._event import extra_of, row_of
+from publishers._event import extra_of, pk_of
 
 NAMESPACE = "rendu_dg:PATCH"
 
 QUEUES = ["gp1-data-provider.queue", "test.queue"]
 
-ARGS = {"rendu_dg": {"id": 1}}
+ARGS = {"pk": 1, "extra": {}}
 
 
 def run(event):
@@ -36,7 +36,7 @@ def run(event):
         "method": "PATCH",
         "table": "app_dg",
         "persist": False,
-        "data": [row_of(event, "rendu_dg")],
+        "data": [{"id": pk_of(event)}],
         "files": [],
         "extra": extra_of(event),
     }

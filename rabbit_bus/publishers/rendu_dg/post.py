@@ -2,7 +2,7 @@
 
 NAMESPACE = "rendu_dg:POST"
 QUEUES = ["gp1-data-provider.queue", "test.queue"]
-ARGS = {"rendu_dg": {"id": 1}}
+ARGS = {"pk": 1, "extra": {}}
 
 
 def run(event):

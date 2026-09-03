@@ -13,18 +13,18 @@ Folder.save() (app/models.py, the save() override): one place that no creation
 path can bypass.
 
 The message is the ecosystem's write-event contract ({method, table, persist,
-data, files}). The data-provider consuming it on gp1-data-provider.queue reads
-`table` and purges that table's cache, so its API keys stop serving a folder
-list this creation just made stale; test.queue receives the same event for the
-test app."""
+data, files}), where `data` holds the key of the created folder and nothing
+else. The data-provider consuming it on gp1-data-provider.queue reads `table`
+and purges that table's cache, so its API keys stop serving a folder list this
+creation just made stale; test.queue receives the same event for the test app."""
 
-from publishers._event import extra_of, row_of
+from publishers._event import extra_of, pk_of
 
 NAMESPACE = "folder:POST"
 
 QUEUES = ["gp1-data-provider.queue", "test.queue"]
 
-ARGS = {"folder": {"id": 630}}
+ARGS = {"pk": 630, "extra": {}}
 
 
 def run(event):
@@ -32,7 +32,7 @@ def run(event):
         "method": "POST",
         "table": "app_folder",
         "persist": False,
-        "data": [row_of(event, "folder")],
+        "data": [{"id": pk_of(event)}],
         "files": [],
         "extra": extra_of(event),
     }

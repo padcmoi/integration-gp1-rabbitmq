@@ -2,7 +2,7 @@
 
 NAMESPACE = "folder:GET"
 QUEUES = ["gp1-data-provider.queue", "test.queue"]
-ARGS = {"folder": {"id": 630}}
+ARGS = {"pk": 630, "extra": {}}
 
 
 def run(event):

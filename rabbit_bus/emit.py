@@ -38,34 +38,29 @@ def _env():
     return values
 
 
-def _row(subject):
-    """A model instance as a JSON-safe row. A dict is already one and passes
-    through untouched, so a caller holding something else than a model keeps
-    the last word on what it announces. A bare key is the minimum an
-    announcement can carry, and it is enough: {"id": <the key>}."""
+def _pk(subject):
+    """The primary key of what is announced, whatever it is handed.
+
+    A model instance answers its own `pk`, a dict its "pk" or "id" key, a
+    number or a string is already the key. The columns of a model are never
+    read: the announcement carries an identity, not a copy of the row."""
     if isinstance(subject, dict):
-        return subject
+        return subject.get("pk") if subject.get("pk") is not None else subject.get("id")
     if isinstance(subject, (int, str)) and not isinstance(subject, bool):
-        return {"id": subject}
-    fields = getattr(getattr(subject, "_meta", None), "concrete_fields", None)
-    if fields is None:
-        return {"value": str(subject)}
-    row = {}
-    for field in fields:
-        value = getattr(subject, field.attname, None)
-        row[field.attname] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
-    return row
+        return subject
+    return getattr(subject, "pk", None)
 
 
-def emit(namespace, subject=None, extra=None):
-    """Fire the publisher of `namespace` with `subject` as its event.
+def emit(namespace, subject, extra=None):
+    """Fire the publisher of `namespace` for the row `subject` names.
 
-    The args key is the business folder, read from the namespace itself:
-    "folder:POST" hands its row over as {"folder": {...}}, which is exactly
-    what publishers/folder/post.py reads.
+    Two keys leave here and no others:
 
-    `extra` is optional and free: any JSON the caller wants carried with the
-    announcement travels under its own key, never mixed into the row."""
+        {"pk": 207, "extra": {}}
+
+    `subject` is the row, as an instance, a dict or the bare key; only its
+    primary key travels. `extra` is optional and free: any JSON the caller
+    wants carried with the announcement, never mixed with the identity."""
     try:
         from kombu import Connection, Producer
 
@@ -75,10 +70,7 @@ def emit(namespace, subject=None, extra=None):
             f"@{env['RABBITMQ_HOST']}:{env['RABBITMQ_PORT']}/{env['RABBITMQ_VHOST'].lstrip('/')}"
         )
         use_ssl = {"cert_reqs": ssl.CERT_REQUIRED} if env["RABBITMQ_PROTOCOL"] == "amqps" else False
-        args = {} if subject is None else {namespace.split(":")[0]: _row(subject)}
-        if extra is not None:
-            args["extra"] = extra
-        message = {"namespace": namespace, "args": args}
+        message = {"namespace": namespace, "args": {"pk": _pk(subject), "extra": {} if extra is None else extra}}
         with Connection(url, ssl=use_ssl, connect_timeout=CONNECT_TIMEOUT) as connection:
             Producer(connection.default_channel).publish(
                 message,

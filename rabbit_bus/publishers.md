@@ -9,13 +9,19 @@ from rabbit_bus.emit import emit
 emit("folder:POST", instance)
 ```
 
-Le deuxième argument est ce qui est annoncé. Au minimum l'id, la PK de la ligne, nombre
-ou chaîne : `emit("folder:POST", 630)` suffit. Une instance de modèle passe aussi, elle
-est convertie en ligne complète. Sans id, le bus répond 400.
+Le message porte deux clés, jamais plus :
+
+```json
+{ "namespace": "folder:POST", "args": { "pk": 207, "extra": {} } }
+```
+
+Le deuxième argument est la ligne annoncée. Seule sa PK part, nombre ou chaîne : une
+instance, un dict ou la clé nue donnent le même message, les colonnes du modèle ne sont
+jamais lues. Qui veut la ligne entière la relit à la source. Sans PK, le bus répond 400.
 
 Le troisième argument, `extra`, est optionnel et totalement libre : n'importe quel JSON,
-ce que tu veux dedans, transporté à côté de la ligne sans jamais s'y mélanger. L'omettre
-est une annonce complète, le mettre n'enlève rien.
+ce que tu veux dedans, transporté à côté de la PK sans jamais s'y mélanger. L'omettre est
+une annonce complète, le mettre n'enlève rien.
 
 ```python
 emit("folder:POST", 630)

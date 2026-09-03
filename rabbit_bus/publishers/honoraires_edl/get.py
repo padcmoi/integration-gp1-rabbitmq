@@ -2,7 +2,7 @@
 
 NAMESPACE = "honoraires_edl:GET"
 QUEUES = ["gp1-data-provider.queue", "test.queue"]
-ARGS = {"honoraires_edl": {"id": 425}}
+ARGS = {"pk": 425, "extra": {}}
 
 
 def run(event):

@@ -1,45 +1,33 @@
-"""What every announcement carries at the very least: the primary key of the
-row it talks about, and whatever free JSON the caller chose to attach to it.
+"""What an announcement carries: two keys, and only two.
 
-A publisher may know the whole row or only its key, and both are announcements;
-what none of them may be is anonymous. A consumer holding its own copy of the
-table needs to know WHICH row changed, and `id` is the only field that answers
-that. So the identity is required and everything else is a bonus.
+    {"pk": 207, "extra": {}}
 
-Accepted, from the richest form to the barest:
+`pk` is the primary key of the row the announcement talks about. It is the
+whole point: a consumer needs to know WHICH row changed, and reads the row from
+the source when it wants its content. A table has three hundred columns, they
+change without asking us, and copying them into every message would make the
+announcement a second, slower, always slightly wrong version of the database.
 
-    {"folder": {"id": 630, "city": "..."}}   the row as written
-    {"folder": 630}                          the key alone
-    {"id": 630}                              the row, unwrapped
-    630                                      the key alone, unwrapped
+`extra` is the deliberate part: any JSON the caller chose to attach, carried
+under its own key, never mixed with the identity. What is not the key goes
+there or does not travel.
 
-The key may be a number or a string, as the source database spells it. Missing
-or empty, it raises ValueError, which the bus answers 400: an announcement
-without identity names no row.
-
-`extra` is the free part: any JSON the caller wants carried alongside the row,
-under its own key so it can never be mistaken for a column of the table. It
-travels untouched and stays `{}` when nobody sends anything.
+`pk` may be a number or a string, as the source database spells it, and `id` is
+accepted as its alias, which is how a mirror publisher reads the result of its
+consumer. Missing or empty, it raises ValueError, which the bus answers 400: an
+announcement without identity names no row.
 
 Helpers start with "_" and are never registered as a namespace."""
 
 
-def row_of(event, key):
-    wrapped = isinstance(event, dict) and key in event
-    subject = event[key] if wrapped else event
-    if isinstance(subject, dict):
-        row = dict(subject)
-        if not wrapped:
-            row.pop("extra", None)
-    elif isinstance(subject, (int, str)) and not isinstance(subject, bool):
-        row = {"id": subject}
+def pk_of(event):
+    if isinstance(event, dict):
+        value = event.get("pk") if event.get("pk") is not None else event.get("id")
     else:
-        row = {}
-    identifier = row.pop("pk", None) if row.get("id") is None else row.get("id")
-    if identifier is None or identifier == "":
-        raise ValueError(f'expected at least the row id, e.g. {{"{key}": {{"id": 630}}}}')
-    row["id"] = identifier
-    return row
+        value = event
+    if isinstance(value, bool) or not isinstance(value, (int, str)) or value == "":
+        raise ValueError('expected args {"pk": 630}')
+    return value
 
 
 def extra_of(event):
