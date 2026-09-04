@@ -1,0 +1,15 @@
+services:
+  app:
+    image: node:24-alpine
+    container_name: gp1_test_witness
+    working_dir: /app
+    command: sh -c "npm i -g pnpm@10 && pnpm install && pnpm dev"
+    ports:
+      - "2223:3000"
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+    restart: unless-stopped
+
+volumes:
+  node_modules:
