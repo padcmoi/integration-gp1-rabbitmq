@@ -22,7 +22,7 @@ data, files}), where `data` holds the key of the DG row and nothing else. The
 data-provider consuming it on gp1-data-provider.queue reads `table` and purges
 that table's cache; test.queue receives the same event for the test app."""
 
-from publishers._event import extra_of, pk_of
+from publishers._event import write_event
 
 NAMESPACE = "rendu_dg:PATCH"
 
@@ -38,10 +38,4 @@ ARGS = {"pk": 1, "extra": {}}
 
 
 def run(event):
-    return {
-        "method": "PATCH",
-        "table": "app_dg",
-        "persist": False,
-        "args": {"pk": pk_of(event), "extra": extra_of(event)},
-        "files": [],
-    }
+    return write_event(event, "PATCH", "app_dg")

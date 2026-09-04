@@ -14,20 +14,29 @@ déclarées dans le fichier du namespace, `gp1-data-provider.queue` et `test.que
 boîte du `.env` ne sert qu'aux consumers, rien n'y transite ; elle est seulement
 inscrite en `replyTo` pour que les réponses reviennent au bus.
 
-Le publisher reçoit deux clés, jamais plus :
+Le message qui part est toujours de cette forme, quel que soit le publisher :
 
 ```json
-{ "pk": 207, "extra": {} }
+{
+  "method": "POST",
+  "table": "app_folder",
+  "persist": false,
+  "args": { "pk": 3890, "extra": { "...": "ton objet" } },
+  "files": [],
+  "replyTo": "gp1-local.queue",
+  "correlationId": "c5dc4581-9480-4b9f-964e-d04a02cdf63a",
+  "publishedAt": "2026-09-04T09:42:32.249Z"
+}
 ```
 
 Le deuxième argument est la ligne annoncée. Seule sa PK part, nombre ou chaîne : une
-instance, un dict ou la clé nue donnent le même message, les colonnes du modèle ne sont
-jamais lues. Qui veut la ligne entière la relit à la source. Sans PK, rien ne part et
+instance, un dict ou la clé nue donnent le même `args.pk`. Sans PK, rien ne part et
 `emit` retourne `False`.
 
 Le troisième argument, `extra`, est optionnel et totalement libre : n'importe quel JSON,
-ce que tu veux dedans, transporté à côté de la PK sans jamais s'y mélanger. L'omettre est
-une annonce complète, le mettre n'enlève rien.
+ce que tu veux dedans, transporté à côté de la PK sans jamais s'y mélanger. Une instance
+de modèle y devient l'objet de toutes ses colonnes. L'omettre est une annonce complète,
+le mettre n'enlève rien.
 
 ```python
 emit("folder:POST", 630)

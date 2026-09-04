@@ -126,11 +126,33 @@ message. Memes regles que les consumers : 5 verbes seulement en dossier metier,
 **L annonce miroir** : une ecriture qui a reussi est annoncee aux queues
 nommees, en fire-and-forget - comme les write-events du data-provider, une
 annonce peut se perdre, elle ne peut jamais faire echouer la reponse au
-demandeur. `run(event)` recoit le resultat du consumer et retourne le message
-au contrat d ecriture de l ecosysteme ({method, table, persist, data, files}) :
-le data-provider qui le recoit purge le cache de la table, l app de test
-l intercepte. Le bus estampille replyTo + correlationId, les reponses
-eventuelles sont reconnues et archivees dans publish.txt.
+demandeur. Le data-provider qui la recoit purge le cache de la table, l app de
+test l intercepte.
+
+**Le format est impose**, pas seulement conseille. Un verbe declare sa methode
+et sa table, rien de plus : `return write_event(event, "POST", "app_folder")`.
+Juste avant l envoi, `normalize()` reconstruit ce que le publisher a retourne,
+dans les deux chemins de publication : les cles etrangeres tombent, `args` est
+rebati depuis l evenement. Le message qui part est toujours celui-ci :
+
+```json
+{
+  "method": "POST",
+  "table": "app_folder",
+  "persist": false,
+  "args": { "pk": 3890, "extra": { "...": "l objet libre de l appelant" } },
+  "files": [],
+  "replyTo": "<queue du bus>",
+  "correlationId": "...",
+  "publishedAt": "2026-09-04T09:42:32.249Z"
+}
+```
+
+`args.pk` est la cle, nombre ou chaine ; `args.extra` ce que l appelant a
+attache, une instance de modele y devient l objet de ses colonnes. `publishedAt`
+est l heure d envoi, UTC en notation Zulu. Un publisher qui ne nomme aucune
+table n annonce pas d ecriture : ceux de `_global` passent intacts. Les reponses
+eventuelles sont reconnues par correlationId et archivees dans publish.txt.
 
 Un publisher autonome (`_global/`) repond `{"ok": true, "published":
 {"queues": [...], "correlationId": "..."}}` a celui qui le declenche.

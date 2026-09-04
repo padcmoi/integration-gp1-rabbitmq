@@ -17,6 +17,10 @@ import importlib
 import logging
 import pkgutil
 
+# Re-exported so the two publishing paths force the shape without reaching into
+# a private module of this package.
+from ._event import normalize  # noqa: F401
+
 logger = logging.getLogger("bus.registry")
 
 ALLOWED_VERBS = ("get", "post", "put", "patch", "delete")

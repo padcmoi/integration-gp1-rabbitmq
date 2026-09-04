@@ -197,7 +197,7 @@ class Bus:
 
     def run_publisher(self, namespace, args):
         entry = publishers.REGISTRY[namespace]
-        payload = entry["run"](args)
+        payload = publishers.normalize(entry["run"](args), args)
         if not isinstance(payload, dict):
             payload = {"data": payload}
         correlation_id = str(uuid.uuid4())

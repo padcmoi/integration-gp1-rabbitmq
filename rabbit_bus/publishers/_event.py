@@ -33,3 +33,43 @@ def pk_of(event):
 def extra_of(event):
     value = event.get("extra") if isinstance(event, dict) else None
     return {} if value is None else value
+
+
+def write_event(event, method, table, files=None):
+    """The one shape an announcement takes. A verb file says which method and
+    which table, and nothing else about the message: the shape is not its
+    business, and a shape decided in fifteen places drifts in fifteen ways."""
+    return {
+        "method": method,
+        "table": table,
+        "persist": False,
+        "args": {"pk": pk_of(event), "extra": extra_of(event)},
+        "files": list(files or []),
+    }
+
+
+def normalize(payload, event):
+    """Force what a publisher returned into that shape, at publication time.
+
+    Whoever writes a verb file can forget the contract, return a stray key or
+    build `args` by hand; the message that leaves carries the five keys and no
+    others. That is what makes the format a guarantee for the reader rather
+    than a convention the sender is asked to respect.
+
+    A payload naming no table announces no write: the free publishers of
+    `_global` are exactly that, and they pass through untouched."""
+    if not isinstance(payload, dict) or not payload.get("table"):
+        return payload
+    given = payload.get("args") if isinstance(payload.get("args"), dict) else {}
+    pk = given.get("pk")
+    extra = given.get("extra")
+    return {
+        "method": payload.get("method", ""),
+        "table": payload["table"],
+        "persist": bool(payload.get("persist", False)),
+        "args": {
+            "pk": pk_of(event) if pk is None else pk,
+            "extra": extra_of(event) if extra is None else extra,
+        },
+        "files": list(payload.get("files") or []),
+    }

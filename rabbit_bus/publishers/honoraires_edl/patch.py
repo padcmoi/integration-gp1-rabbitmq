@@ -6,7 +6,7 @@ data, files}). The data-provider consuming it on gp1-data-provider.queue reads
 `table` and purges that table's cache, so its API keys stop serving rows this
 write just made stale; test.queue receives the same event for the test app."""
 
-from publishers._event import extra_of, pk_of
+from publishers._event import write_event
 
 NAMESPACE = "honoraires_edl:PATCH"
 
@@ -22,10 +22,4 @@ ARGS = {"pk": 425, "extra": {}}
 
 
 def run(event):
-    return {
-        "method": "PATCH",
-        "table": "app_honorairesedl",
-        "persist": False,
-        "args": {"pk": pk_of(event), "extra": extra_of(event)},
-        "files": [],
-    }
+    return write_event(event, "PATCH", "app_honorairesedl")

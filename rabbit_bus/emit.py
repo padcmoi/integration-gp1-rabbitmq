@@ -51,15 +51,15 @@ def _env():
     return values
 
 
-def _registry():
-    """The publishers registry, imported the way main.py sees it: `publishers`
+def _publishers():
+    """The publishers package, imported the way main.py sees it: `publishers`
     is a top-level package from inside rabbit_bus/, and the caller's process
     knows nothing of that directory until told."""
     if str(BASE_DIR) not in sys.path:
         sys.path.insert(0, str(BASE_DIR))
     import publishers
 
-    return publishers.REGISTRY
+    return publishers
 
 
 def _pk(subject):
@@ -116,11 +116,13 @@ def emit(namespace, subject, extra=None):
     try:
         from kombu import Connection, Producer
 
-        entry = _registry().get(namespace)
+        registry = _publishers()
+        entry = registry.REGISTRY.get(namespace)
         if entry is None:
             logger.warning("emit namespace=%s unknown, nothing sent", namespace)
             return False
-        payload = entry["run"]({"pk": _pk(subject), "extra": _extra(extra)})
+        event = {"pk": _pk(subject), "extra": _extra(extra)}
+        payload = registry.normalize(entry["run"](event), event)
         if not isinstance(payload, dict):
             payload = {"data": payload}
 

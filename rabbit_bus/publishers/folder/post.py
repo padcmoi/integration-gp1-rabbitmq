@@ -18,7 +18,7 @@ else. The data-provider consuming it on gp1-data-provider.queue reads `table`
 and purges that table's cache, so its API keys stop serving a folder list this
 creation just made stale; test.queue receives the same event for the test app."""
 
-from publishers._event import extra_of, pk_of
+from publishers._event import write_event
 
 NAMESPACE = "folder:POST"
 
@@ -34,10 +34,4 @@ ARGS = {"pk": 630, "extra": {}}
 
 
 def run(event):
-    return {
-        "method": "POST",
-        "table": "app_folder",
-        "persist": False,
-        "args": {"pk": pk_of(event), "extra": extra_of(event)},
-        "files": [],
-    }
+    return write_event(event, "POST", "app_folder")
