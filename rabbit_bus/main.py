@@ -150,6 +150,31 @@ class Bus:
         except OSError:
             pass
 
+    def ensure_inbox(self, conn):
+        """Make sure the mailbox we consume exists, and say so out loud.
+
+        A consumer without its queue receives nothing, silently, for as long as
+        nobody looks: the queue can be deleted from the console, or never have
+        been created at all. So it is checked and declared at every connection,
+        which covers the boot and every reconnection after it.
+
+        The check is a passive declare on a throwaway channel: asking whether a
+        queue exists closes the channel when the answer is no, which is why it
+        cannot be the channel the rest of the run depends on."""
+        probe = conn.channel()
+        try:
+            probe.queue_declare(queue=self.queue_name, passive=True)
+            existed = True
+        except Exception:
+            existed = False
+        finally:
+            try:
+                probe.close()
+            except Exception:
+                pass
+        Queue(self.queue_name, durable=True)(conn.default_channel).declare()
+        logger.info("inbox %s %s", self.queue_name, "already there" if existed else "MISSING, created")
+
     def publish(self, queue, payload, correlation_id=None, reply_to=None):
         producer = Producer(self.connection.default_channel)
         producer.publish(
@@ -274,6 +299,7 @@ class Bus:
             try:
                 with Connection(self.url, ssl={"cert_reqs": ssl.CERT_REQUIRED}, heartbeat=self.heartbeat) as conn:
                     self.connection = conn
+                    self.ensure_inbox(conn)
                     queue = Queue(self.queue_name, durable=True)
                     with Consumer(conn, queues=[queue], callbacks=[self.on_message], prefetch_count=1, accept=["json"]):
                         logger.info(
