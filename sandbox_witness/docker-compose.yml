@@ -1,7 +1,8 @@
+name: gp1_test_witness_2
 services:
   app:
     image: node:24-alpine
-    container_name: gp1_test_witness
+    container_name: gp1_test_witness_2
     working_dir: /app
     command: sh -c "npm i -g pnpm@10 && pnpm install && pnpm dev"
     ports:
