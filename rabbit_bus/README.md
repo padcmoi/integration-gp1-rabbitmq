@@ -153,6 +153,24 @@ préremplis de l'app de test.
 
 Rotation automatique à 5 Mo (`.old`). `BUS_DEBUG=false` : plus aucune écriture.
 
+## Démarrer le consumer depuis l'application
+
+Le bus tourne soit en service (`main.py`), soit dans le processus de l'app qui
+l'héberge. Dans ce second cas, une ligne dans le `ready()` de l'AppConfig :
+
+```python
+from rabbit_bus.boot import start_in_background
+start_in_background()
+```
+
+Le consumer part dans un thread démon, déclare sa file au démarrage et à chaque
+reconnexion, et meurt avec l'app. Deux appels ne démarrent qu'un consumer, et un
+broker injoignable n'empêche pas l'app de démarrer. Au démarrage, `inbox <file>
+MISSING, created` ou `already there` dit ce qu'il en est.
+
+`emit` est le côté publisher : il publie, il ne déclare aucune file. Sans
+consumer lancé, la file d'entrée n'existe pas et rien n'arrive.
+
 ## Ajouter / modifier
 
 Déposer ou éditer le fichier, puis `sudo systemctl restart gp1-test-bus`.
