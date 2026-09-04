@@ -190,7 +190,7 @@ reconnexion, et meurt avec l'app. Deux appels ne démarrent qu'un consumer, et u
 broker injoignable n'empêche pas l'app de démarrer. Au démarrage, `inbox <file>
 MISSING, created` ou `already there` dit ce qu'il en est.
 
-`emit` est le côté publisher : il publie, il ne déclare aucune file. Sans
+`AmqpPublish` est le côté publisher : il publie, il ne déclare aucune file. Sans
 consumer lancé, la file d'entrée n'existe pas et rien n'arrive.
 
 ## Ajouter / modifier

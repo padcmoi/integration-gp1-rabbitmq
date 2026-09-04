@@ -12,8 +12,8 @@ This is the other way in. One line where the application boots:
     start_in_background()
 
 and the consumer runs in a daemon thread of that process: it declares its inbox
-at every connection, consumes it, and dies with the application. `emit` stays
-what it is, the publisher side, and never declares anything.
+at every connection, consumes it, and dies with the application. `AmqpPublish`
+stays what it is, the publisher side, and never declares anything.
 
 Called twice, it starts once: Django's autoreloader imports the app twice in
 development, and two consumers in one process would take turns eating the same

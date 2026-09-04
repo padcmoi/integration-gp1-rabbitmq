@@ -2,11 +2,13 @@
 
 A publisher file only builds a message. Nothing calls it on its own: an
 announcement happens because someone said it happened. This is that someone,
-called once, where the write it announces has just been done:
+written where the write it announces has just been done:
 
-    from rabbit_bus.emit import emit
+    from rabbit_bus.emit import AmqpPublish
 
-    emit("folder:POST", self)
+    message = AmqpPublish("folder:POST")
+    message.pk = 630
+    message.execute()
 
 The publisher runs right here, in the calling process, and its write-event goes
 straight to the QUEUES its file declares. No round trip through the bus inbox:
@@ -15,10 +17,10 @@ depend on a daemon listening to it. The event is stamped with replyTo on that
 inbox and a correlationId, so a recipient that answers still reaches the bus,
 which records the answer in publish.txt.
 
-Fire-and-forget by construction: an unknown namespace, a publisher without an
-announcement yet, a broker that is down, a queue that refuses, all answer False
-and are logged. An announcement can never fail the write that produced it,
-which is why nothing raises out of here."""
+Fire-and-forget by construction: an unknown namespace, a missing pk, a
+publisher without an announcement yet, a broker that is down, a queue that
+refuses, all answer False and are logged. An announcement can never fail the
+write that produced it, which is why nothing raises out of here."""
 
 import json
 import logging
@@ -77,21 +79,26 @@ def _pk(subject):
 
 def _columns(subject):
     """A model instance as a plain dict of its columns, or None if it is not
-    one. Handing `extra` a model is the obvious way to say "carry the whole
-    row", and stringifying it would answer "Folder object (3890)", which says
-    nothing to whoever reads the message."""
+    one. Handing a model to an attribute is the obvious way to say "carry the
+    whole row", and stringifying it would answer "Folder object (3890)", which
+    says nothing to whoever reads the message."""
     fields = getattr(getattr(subject, "_meta", None), "concrete_fields", None)
     if fields is None:
         return None
     return {field.attname: getattr(subject, field.attname, None) for field in fields}
 
 
+def _jsonable(value):
+    """Any value, made safe to send: a model instance becomes its columns, and
+    anything else goes through json with str() as the fallback, which is what
+    turns a date or a FieldFile into something a broker accepts."""
+    columns = _columns(value)
+    return json.loads(json.dumps(value if columns is None else columns, default=str))
+
+
 def _extra(extra):
-    """Free JSON, made safe to send. A string is taken as JSON already dumped
-    and parsed back, so it travels as an object and not as text; a model
-    instance becomes its columns; anything else goes through json with str() as
-    the fallback, which is what turns a date or a FieldFile into something a
-    broker accepts."""
+    """Free JSON. A string is taken as JSON already dumped and parsed back, so
+    it travels as an object and not as text."""
     if extra is None:
         return {}
     if isinstance(extra, str):
@@ -99,32 +106,77 @@ def _extra(extra):
             return json.loads(extra)
         except ValueError:
             return extra
-    columns = _columns(extra)
-    return json.loads(json.dumps(extra if columns is None else columns, default=str))
+    return _jsonable(extra)
 
 
-def emit(namespace, subject, extra=None):
-    """Fire the publisher of `namespace` for the row `subject` names.
+class AmqpPublish:
+    """An announcement being written, one attribute at a time.
 
-    The publisher receives two keys and no others:
+        message = AmqpPublish("folder:POST")
+        message.pk = 630
+        message.extra = {"origine": "create_folder", "par": request.user.pk}
+        message.files = []
+        message.execute()
 
-        {"pk": 207, "extra": {}}
+    `pk` is the only thing required: it names the row the announcement talks
+    about, and without it nothing leaves. `extra` and `files` are optional and
+    start empty.
 
-    `subject` is the row, as an instance, a dict or the bare key; only its
-    primary key travels. `extra` is optional and free: any JSON the caller
-    wants carried with the announcement, never mixed with the identity."""
-    try:
+    Any other attribute set here joins the envelope of the message under its
+    own name, which is how this stays open without a new release of the bus
+    every time a recipient wants one more field:
+
+        message.source = "back-office"
+
+    `args` is the one name that cannot be taken: it carries `pk` and `extra`,
+    it is what every reader of the bus relies on, and it is rebuilt at
+    publication time whatever a publisher returned."""
+
+    RESERVED = ("namespace", "pk", "extra", "args")
+
+    def __init__(self, namespace):
+        self.namespace = namespace
+        self.pk = None
+        self.extra = None
+        self.files = []
+
+    def execute(self):
+        """Run the publisher and send its message to every queue it declares.
+        True when it left, False when it did not, and never an exception."""
+        try:
+            return self._execute()
+        except Exception as error:
+            logger.warning("emit namespace=%s failed (%s: %s)", self.namespace, type(error).__name__, error)
+            return False
+
+    def _attributes(self):
+        """What the caller added, ready for the envelope. `files` is here too:
+        it is a plain attribute that happens to exist by default."""
+        return {
+            name: _jsonable(value)
+            for name, value in vars(self).items()
+            if name not in self.RESERVED and not name.startswith("_")
+        }
+
+    def _execute(self):
         from kombu import Connection, Producer
 
         registry = _publishers()
-        entry = registry.REGISTRY.get(namespace)
+        entry = registry.REGISTRY.get(self.namespace)
         if entry is None:
-            logger.warning("emit namespace=%s unknown, nothing sent", namespace)
+            logger.warning("emit namespace=%s unknown, nothing sent", self.namespace)
             return False
-        event = {"pk": _pk(subject), "extra": _extra(extra)}
+
+        pk = _pk(self.pk)
+        if isinstance(pk, bool) or not isinstance(pk, (int, str)) or pk == "":
+            logger.warning("emit namespace=%s has no pk, nothing sent", self.namespace)
+            return False
+
+        event = {"pk": pk, "extra": _extra(self.extra)}
         payload = registry.normalize(entry["run"](event), event)
         if not isinstance(payload, dict):
             payload = {"data": payload}
+        payload.update(self._attributes())
 
         env = _env()
         inbox = f"{env['RABBITMQ_NAMESPACE']}.queue"
@@ -155,8 +207,14 @@ def emit(namespace, subject, extra=None):
                     reply_to=inbox,
                     retry=False,
                 )
-                logger.info("emitted namespace=%s queue=%s correlationId=%s", namespace, queue, correlation_id)
+                logger.info("emitted namespace=%s queue=%s correlationId=%s", self.namespace, queue, correlation_id)
         return True
-    except Exception as error:
-        logger.warning("emit namespace=%s failed (%s: %s)", namespace, type(error).__name__, error)
-        return False
+
+
+def emit(namespace, subject, extra=None):
+    """The same announcement written in one line, for the calls that have
+    nothing to customise. Kept because GP1 already speaks this form."""
+    message = AmqpPublish(namespace)
+    message.pk = subject
+    message.extra = extra
+    return message.execute()

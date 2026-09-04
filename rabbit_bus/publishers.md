@@ -1,20 +1,53 @@
 # Déclencher un publisher
 
-Un publisher construit un message, il ne s'appelle pas tout seul. La ligne à écrire, là
-où l'écriture vient de se faire :
+Un publisher construit un message, il ne s'appelle pas tout seul. Ce qu'il faut écrire,
+là où l'écriture vient de se faire :
 
 ```python
-from rabbit_bus.emit import emit
+from rabbit_bus.emit import AmqpPublish
 
-emit("folder:POST", instance)
+message = AmqpPublish("folder:POST")
+message.pk = 630
+message.execute()
 ```
 
-`emit` exécute le publisher sur place et envoie son message directement aux `QUEUES`
-déclarées dans le fichier du namespace, `gp1-data-provider.queue` et `test.queue`. La
-boîte du `.env` ne sert qu'aux consumers, rien n'y transite ; elle est seulement
-inscrite en `replyTo` pour que les réponses reviennent au bus.
+`pk` est la seule chose obligatoire : c'est la ligne annoncée, nombre ou chaîne. Une
+instance de modèle ou un dict conviennent aussi, seule leur PK part. Sans `pk`, rien
+n'est envoyé et `execute()` retourne `False`.
 
-Le message qui part est toujours de cette forme, quel que soit le publisher :
+`execute()` exécute le publisher sur place et envoie son message directement aux `QUEUES`
+déclarées dans le fichier du namespace. La boîte du `.env` ne sert qu'aux consumers, rien
+n'y transite ; elle est seulement inscrite en `replyTo` pour que les réponses reviennent
+au bus. Rien ne bloque, rien ne lève.
+
+## Les attributs
+
+```python
+message = AmqpPublish("folder:POST")
+message.pk = 630
+message.extra = {"origine": "create_folder", "par": request.user.pk, "exemple": "ce json tu mets ce que tu veux"}
+message.files = []
+message.execute()
+```
+
+| Attribut | Obligatoire | Ce qu'il porte                                                       |
+| -------- | ----------- | -------------------------------------------------------------------- |
+| `pk`     | oui         | la PK de la ligne annoncée                                           |
+| `extra`  | non         | n'importe quel JSON, libre, à côté de la PK sans jamais s'y mélanger |
+| `files`  | non         | liste de fichiers, vide pour l'instant                               |
+
+Tout autre attribut posé sur l'objet part dans l'enveloppe sous son propre nom, c'est
+ainsi qu'on ajoute un champ sans toucher au bus :
+
+```python
+message.source = "back-office"
+```
+
+Seul `args` est réservé : il porte `pk` et `extra`, et il est reconstruit à l'envoi.
+
+## Le message qui part
+
+Toujours cette forme, quel que soit le publisher :
 
 ```json
 {
@@ -29,43 +62,27 @@ Le message qui part est toujours de cette forme, quel que soit le publisher :
 }
 ```
 
-Le deuxième argument est la ligne annoncée. Seule sa PK part, nombre ou chaîne : une
-instance, un dict ou la clé nue donnent le même `args.pk`. Sans PK, rien ne part et
-`emit` retourne `False`.
-
-Le troisième argument, `extra`, est optionnel et totalement libre : n'importe quel JSON,
-ce que tu veux dedans, transporté à côté de la PK sans jamais s'y mélanger. Une instance
-de modèle y devient l'objet de toutes ses colonnes. L'omettre est une annonce complète,
-le mettre n'enlève rien.
-
-```python
-emit("folder:POST", 630)
-emit("folder:POST", 630, {"origine": "create_folder", "par": request.user.pk, "exemple": "ce json tu mets ce que tu veux"})
-```
-
-`emit` ne bloque pas et ne lève jamais.
-
-| Namespace              | La ligne                         | Ce qui est annoncé            |
-| ---------------------- | -------------------------------- | ----------------------------- |
-| `folder:POST`          | `emit("folder:POST", 630)`       | dossier propriétaire créé     |
-| `rendu_dg:PATCH`       | `emit("rendu_dg:PATCH", 1)`      | état des lieux de sortie posé |
-| `honoraires_edl:PATCH` | rien à écrire, c'est automatique | champ honoraires EDL modifié  |
+| Namespace              | Ce qui est annoncé            |
+| ---------------------- | ----------------------------- |
+| `folder:POST`          | dossier propriétaire créé     |
+| `rendu_dg:PATCH`       | état des lieux de sortie posé |
+| `honoraires_edl:PATCH` | champ honoraires EDL modifié  |
 
 `honoraires_edl:PATCH` part tout seul quand le consumer du même namespace réussit son
-écriture. Ne jamais l'appeler avec `emit` : cela n'annoncerait rien, cela exécuterait
+écriture. Ne jamais le publier à la main : cela n'annoncerait rien, cela exécuterait
 l'écriture en base.
 
 Après modification d'un fichier : `sudo systemctl restart gp1-test-bus`.
 
 ## Exemple réel : la création d'un dossier
 
-Le `save()` de `Folder` dans `app/models.py`, avec les deux lignes ajoutées. L'appel se
-place après le `super().save()` : avant, la PK n'existe pas encore. `creating` retient
+Le `save()` de `Folder` dans `app/models.py`, avec les lignes ajoutées. L'appel se place
+après le `super().save()` : avant, la PK n'existe pas encore. `creating` retient
 l'information parce qu'après la sauvegarde, la ligne n'est plus reconnaissable comme
 neuve, et il sert à n'annoncer que la création, puisque le namespace dit POST.
 
 ```python
-from rabbit_bus.emit import emit                   # en haut du fichier
+from rabbit_bus.emit import AmqpPublish        # en haut du fichier
 
 
     def save(self, *args, **kwargs):
@@ -75,12 +92,14 @@ from rabbit_bus.emit import emit                   # en haut du fichier
         else:
             step_changed = False
 
-        creating = not self.pk                      # ajout
+        creating = not self.pk                  # ajout
 
         super().save(*args, **kwargs)
 
-        if creating:
-            emit("folder:POST", self)               # ajout
+        if creating:                            # ajout
+            message = AmqpPublish("folder:POST")
+            message.pk = self.pk
+            message.execute()
 
         if step_changed:
             self.create_notification()
@@ -91,3 +110,8 @@ from rabbit_bus.emit import emit                   # en haut du fichier
 
 Aucune des vingt créations de `Folder` dans `app/form.py` n'a besoin d'être touchée :
 elles passent toutes par ce `save()`.
+
+## L'ancienne forme
+
+`emit("folder:POST", 630, {...})` fonctionne toujours, à l'identique : c'est la même
+publication écrite en une ligne. Rien à changer dans le code déjà en place.
