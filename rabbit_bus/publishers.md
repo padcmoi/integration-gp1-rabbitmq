@@ -21,11 +21,11 @@ Le message qui part est toujours de cette forme, quel que soit le publisher :
   "method": "POST",
   "table": "app_folder",
   "persist": false,
-  "args": { "pk": 3890, "extra": { "...": "ton objet" } },
   "files": [],
   "replyTo": "gp1-local.queue",
   "correlationId": "c5dc4581-9480-4b9f-964e-d04a02cdf63a",
-  "publishedAt": "2026-09-04T09:42:32.249Z"
+  "publishedAt": "2026-09-04T09:42:32.249Z",
+  "args": { "pk": 3890, "extra": { "...": "ton objet" } }
 }
 ```
 

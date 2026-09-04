@@ -206,6 +206,10 @@ class Bus:
         payload.setdefault("replyTo", self.queue_name)
         payload.setdefault("correlationId", correlation_id)
         payload.setdefault("publishedAt", utc_now())
+        # Read last because it is the deepest: the envelope of the announcement
+        # stays scannable above it.
+        if "args" in payload:
+            payload["args"] = payload.pop("args")
         for queue in entry["queues"]:
             self.publish(queue, payload, correlation_id, self.queue_name)
             logger.info("-> published namespace=%s queue=%s correlationId=%s", namespace, queue, correlation_id)

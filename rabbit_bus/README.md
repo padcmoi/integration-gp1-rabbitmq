@@ -140,11 +140,11 @@ rebati depuis l evenement. Le message qui part est toujours celui-ci :
   "method": "POST",
   "table": "app_folder",
   "persist": false,
-  "args": { "pk": 3890, "extra": { "...": "l objet libre de l appelant" } },
   "files": [],
   "replyTo": "<queue du bus>",
   "correlationId": "...",
-  "publishedAt": "2026-09-04T09:42:32.249Z"
+  "publishedAt": "2026-09-04T09:42:32.249Z",
+  "args": { "pk": 3890, "extra": { "...": "l objet libre de l appelant" } }
 }
 ```
 

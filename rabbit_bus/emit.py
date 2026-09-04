@@ -132,6 +132,10 @@ def emit(namespace, subject, extra=None):
         payload.setdefault("replyTo", inbox)
         payload.setdefault("correlationId", correlation_id)
         payload.setdefault("publishedAt", _utc_now())
+        # Read last because it is the deepest: the envelope of the announcement
+        # stays scannable above it.
+        if "args" in payload:
+            payload["args"] = payload.pop("args")
 
         url = (
             f"{env['RABBITMQ_PROTOCOL']}://{env['RABBITMQ_USER']}:{env['RABBITMQ_PASSWORD']}"
