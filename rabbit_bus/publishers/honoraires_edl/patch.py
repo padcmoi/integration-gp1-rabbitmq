@@ -26,7 +26,6 @@ def run(event):
         "method": "PATCH",
         "table": "app_honorairesedl",
         "persist": False,
-        "data": [{"id": pk_of(event)}],
+        "args": {"pk": pk_of(event), "extra": extra_of(event)},
         "files": [],
-        "extra": extra_of(event),
     }

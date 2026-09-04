@@ -25,12 +25,19 @@ import logging
 import ssl
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger("bus.emit")
 
 BASE_DIR = Path(__file__).resolve().parent
 CONNECT_TIMEOUT = 3
+
+
+def _utc_now():
+    """When a message left, in UTC, Zulu notation: 2026-09-04T09:35:12.345Z.
+    Read the same way whatever the timezone of who receives it."""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _env():
@@ -68,11 +75,23 @@ def _pk(subject):
     return getattr(subject, "pk", None)
 
 
+def _columns(subject):
+    """A model instance as a plain dict of its columns, or None if it is not
+    one. Handing `extra` a model is the obvious way to say "carry the whole
+    row", and stringifying it would answer "Folder object (3890)", which says
+    nothing to whoever reads the message."""
+    fields = getattr(getattr(subject, "_meta", None), "concrete_fields", None)
+    if fields is None:
+        return None
+    return {field.attname: getattr(subject, field.attname, None) for field in fields}
+
+
 def _extra(extra):
     """Free JSON, made safe to send. A string is taken as JSON already dumped
-    and parsed back, so it travels as an object and not as text; anything else
-    goes through json with str() as the fallback, which is what turns a date
-    or a FieldFile into something a broker accepts."""
+    and parsed back, so it travels as an object and not as text; a model
+    instance becomes its columns; anything else goes through json with str() as
+    the fallback, which is what turns a date or a FieldFile into something a
+    broker accepts."""
     if extra is None:
         return {}
     if isinstance(extra, str):
@@ -80,7 +99,8 @@ def _extra(extra):
             return json.loads(extra)
         except ValueError:
             return extra
-    return json.loads(json.dumps(extra, default=str))
+    columns = _columns(extra)
+    return json.loads(json.dumps(extra if columns is None else columns, default=str))
 
 
 def emit(namespace, subject, extra=None):
@@ -109,6 +129,7 @@ def emit(namespace, subject, extra=None):
         correlation_id = str(uuid.uuid4())
         payload.setdefault("replyTo", inbox)
         payload.setdefault("correlationId", correlation_id)
+        payload.setdefault("publishedAt", _utc_now())
 
         url = (
             f"{env['RABBITMQ_PROTOCOL']}://{env['RABBITMQ_USER']}:{env['RABBITMQ_PASSWORD']}"

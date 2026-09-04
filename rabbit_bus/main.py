@@ -20,10 +20,17 @@ import ssl
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from kombu import Connection, Consumer, Producer, Queue
+
+def utc_now():
+    """When a message left, in UTC, Zulu notation: 2026-09-04T09:35:12.345Z.
+    Read the same way whatever the timezone of who receives it."""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
 
 BASE_DIR = Path(__file__).resolve().parent
 LOG_DIR = Path("/var/log/gp1-test-bus")
@@ -198,6 +205,7 @@ class Bus:
         # carry where and under which id, whichever the recipient reads.
         payload.setdefault("replyTo", self.queue_name)
         payload.setdefault("correlationId", correlation_id)
+        payload.setdefault("publishedAt", utc_now())
         for queue in entry["queues"]:
             self.publish(queue, payload, correlation_id, self.queue_name)
             logger.info("-> published namespace=%s queue=%s correlationId=%s", namespace, queue, correlation_id)

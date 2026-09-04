@@ -38,7 +38,6 @@ def run(event):
         "method": "POST",
         "table": "app_folder",
         "persist": False,
-        "data": [{"id": pk_of(event)}],
+        "args": {"pk": pk_of(event), "extra": extra_of(event)},
         "files": [],
-        "extra": extra_of(event),
     }
